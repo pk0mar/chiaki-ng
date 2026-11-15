@@ -53,9 +53,15 @@ jobs:
       - name: Setup MSVC
         uses: ilammy/msvc-dev-cmd@v1
 
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
       - name: Setup Qt
         uses: jurplel/install-qt-action@v4
         with:
+          setup-python: false
           version: "6.12.*"
           host: 'windows'
           target: 'desktop'
