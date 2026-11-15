@@ -164,11 +164,27 @@ static void feedback_sender_send_state(ChiakiFeedbackSender *feedback_sender, co
 		CHIAKI_LOGE(feedback_sender->log, "FeedbackSender failed to send Feedback State");
 }
 
+// THROWER EDITION: every button press/release goes out THROWER_DUP_COUNT extra times, THROWER_DUP_GAP_US apart.
+// Stock chiaki sends a history packet once over UDP; if Wi-Fi drops it, the next copy only goes out 20 ms later
+// (the tail resends below), so one lost packet makes a perfectly timed release land 20+ ms late. The console
+// keeps the last sequence number it applied and ignores repeats (see the comment at the top of this file), so
+// extra copies are harmless: whichever copy arrives first is applied, the rest change nothing.
+#define THROWER_DUP_COUNT 3
+#define THROWER_DUP_GAP_US 1500
+
 static void feedback_sender_send_history_packet(ChiakiFeedbackSender *feedback_sender, ChiakiSeqNum16 seq_num, uint8_t event_count, const uint8_t *buf, size_t buf_size)
 {
 	//CHIAKI_LOGD(feedback_sender->log, "Feedback History:");
 	//chiaki_log_hexdump(feedback_sender->log, CHIAKI_LOG_DEBUG, buf, buf_size);
 	chiaki_takion_send_feedback_history(feedback_sender->takion, seq_num, event_count, (uint8_t *)buf, buf_size);
+	for(int i = 0; i < THROWER_DUP_COUNT; i++)
+	{
+		// short busy wait (QueryPerformanceCounter based): Sleep(1) can take ~15 ms on Windows
+		uint64_t until_us = chiaki_time_now_monotonic_us() + THROWER_DUP_GAP_US;
+		while(chiaki_time_now_monotonic_us() < until_us)
+			;
+		chiaki_takion_send_feedback_history(feedback_sender->takion, seq_num, event_count, (uint8_t *)buf, buf_size);
+	}
 }
 
 static void feedback_sender_flush_history_locked(ChiakiFeedbackSender *feedback_sender)
